@@ -5,20 +5,30 @@ import torch.nn.init as initer
 import torch.distributed as torch_dist
 
 
-def update_config(cfg, args):
+def merge_config(cfg, args):
     cfg.defrost()
     
     if args.config is not None:
         cfg.merge_from_file(args.config)
     if args.opts is []:
         cfg.merge_from_list(args.opts)
+    
+    cfg.freeze()
+
+    return cfg
+
+def update_config(cfg, args):
+    cfg.defrost()
+    
+    cfg.merge_from_file(args)
+    
     cfg.freeze()
 
     return cfg
 
 def get_logger(path):
     
-    logger_name = "main-logger"
+    logger_name = 'main-logger'
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.INFO)
     
@@ -64,18 +74,19 @@ class AverageMeter(object):
 
 
 
-def adjust_learning_rate(optimizer, base_lr, max_iters, cur_iters, power=0.9, nbb_mult=10):
+def adjust_learning_rate(optimizer, base_lr, nbb_lr, max_iters, cur_iters, power=0.9):
     """
         code is from pytorch imagenet examples
         Sets the learning rate to the initial LR decayed with poly learning rate with power 0.9
-        
     """
-
-    lr = base_lr*((1-float(cur_iters)/max_iters)**(power))
+    steps = ((1-float(cur_iters)/max_iters)**(power))
+    
+    lr = base_lr * steps
     optimizer.param_groups[0]['lr'] = lr
 
     if len(optimizer.param_groups) == 2:
-        optimizer.param_groups[1]['lr'] = lr * nbb_mult
+        lr2 = nbb_lr * steps
+        optimizer.param_groups[1]['lr'] = lr2
 
     return lr
 
