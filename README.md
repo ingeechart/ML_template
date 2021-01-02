@@ -1,15 +1,18 @@
-# base code template
+# Pytorch Code Template
 this is base code template for semantic segmentation experiments
 
 # Prepare Dataset
 ```
-ln -s /dataDisk/Datasets/cityscapes/
+ln -s /dataDisk/Datasets/[option]/ .
 ```
+option: `cityscapes`, `coco`, `ImageNet` 
 
 # Training.
 for Single-Node multi-process distributed training, use
 ```
 python -m torch.distributed.launch --nproc_per_node=NUM_GPUS_YOU_HAVE YOUR_TRAINING_SCRIPT.py --arg1 --arg2
+
+python -m torch.distributed.launch --nproc_per_node=4 train.py --
 ```
 # Test.
 ```
@@ -29,39 +32,44 @@ base
 │   ├── train
 │   ├── validation
 │
-├── data.py
-│   ├── cityscapes_Dataset
-│   ├── build_train_dataloader
-│   ├── build_val_dataloader
+├── data/
+│   ├── __init__.py
+│   ├── dataset.py
+│   ├── buildDataloader.py
+│   │   ├── build_train_dataloader
+│   │   ├── build_val_dataloader
+│   │
+│   ├── transforms.py
 │
-├── model.py
-│   ├── build_model
+├── model/ (will be modified)
+│   ├── __init__.py
 │   ├── backbone 
 │   ├── modules
 │   ├── model
 │   ├── loss_function
 │
-├── utils
+├── utils/ (will be modified)
 │   ├── utils.py
-│   │   ├── get_logger
-│   │   ├── AverageMeter
-│   │   ├── adjust_learning_rate
-│   │   ├── intersectionAndUnion
-│   │   ├── intersectionAndUnionGPU
-│   │   
-│   ├── transform.py
-│   │   ├── usilts for transform data
+│       ├── get_logger
+│       ├── update/merge config
+│       ├── AverageMeter
+│       ├── adjust_learning_rate
+│       ├── intersectionAndUnion
+│       ├── intersectionAndUnionGPU
+│   
+├── configs/
+│   ├── base.yaml
 │
-├── config.py(Todo)
+├── config.py
 │
-├── result
+├── result/
 │   ├── tb_data
 │   │   ├── train
 │   │   ├── val
 │   │
-│   ├── exp_name_logfile.log
+│   ├── logs
 │
-├── cityscapes (ln -s /dataDisk/Datasets/cityscapes/)
+├── cityscapes/
 ```
 
 # Todo
