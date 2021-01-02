@@ -1,5 +1,0 @@
-GPUS: (0, ) #(0,1,2,3)
-OUTPUT_DIR: 'output'
-LOG_DIR: 'log'
-WORKERS: 8
-PRINT_FREQ: 10
