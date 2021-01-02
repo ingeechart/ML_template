@@ -1,0 +1,47 @@
+SYS:
+  EXP_NAME: 'testing'
+  GPUS:
+  WORKERS: 8
+  PIN_MEMORY: True
+  LOCAL_RANK: ''
+
+CUDNN:
+  BENCHMARK: True
+  DETERMINISTIC: False
+  ENABLED: True
+
+TRAIN:
+  RESUME: ''
+  START_EPOCH: 1
+  END_EPOCH: 800
+  PRINT_FREQ: 20
+  BATCH_SIZE: 16
+  BATCH_SIZE_VAL: 4
+  SEED: 1007
+  OPT: 
+    NAME: 'SGD'
+    LR: 0.02
+    NBB_LR: 0.06
+    WD: 1e-4
+    MOMENTUM: 0.9
+
+MODEL:
+  NAME: 'model'
+  BB_PRETRAINED: ''
+  LOSS: ''
+  FREEZE_BN: ''
+  NBB_KEYWORDS: []
+
+
+DATA:
+  ROOT: 'cityscapes/'
+  SET: 'cityscapes'
+  NUM_CLASSES: 19
+  TRAIN_SPLIT: 'train'
+  VAL_SPLIT: 'val'
+  TEST_SPLIT: 'test'
+  SHUFFLE: False
+  DROP_LAST: True
+  AUG:
+    R_SCALE: [0.5,2]
+    CROP_SIZE: [768, 1536] # [1024,2048]
