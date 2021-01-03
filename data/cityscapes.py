@@ -13,7 +13,7 @@ from PIL import Image
 data loader for cityscapes dataset with panoptic annotation
 
 '''
-class Cityscapes(data.Dataset):
+class Dataset(data.Dataset):
     def __init__(self, cfg, data_root, split='train',transforms=False, ignore_label=255):
         '''
         path:
@@ -115,7 +115,7 @@ if __name__=='__main__':
         transform.Normalize(mean=mean, std=std)
         ])
 
-    dataset = Cityscapes(root,transforms=train_transform)
+    dataset = Dataset(root,transforms=train_transform)
 
     img, label =dataset.__getitem__(0)
     print(img.dtype)

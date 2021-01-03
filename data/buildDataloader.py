@@ -1,4 +1,5 @@
 import os
+import importlib
 import glob
 import numpy as np
 
@@ -8,7 +9,6 @@ import torch.distributed as dist
 
 from data import transform
 from PIL import Image
-
 
 
 def build_train_loader(cfg):
@@ -28,19 +28,19 @@ def build_train_loader(cfg):
         transform.Normalize(mean=mean, std=std)
         ])
 
-    train_data = Cityscapes(data_root='cityscapes/', split='train', transforms=train_transforms)
+    dataModule = importlib.import_module('data.'+cfg.DATA.SET)
+    Dataset = getattr(dataModule, 'Dataset')
+    train_data = Dataset(cfg,data_root='cityscapes/', split='train', transforms=train_transforms)
 
-    # TODO
     if dist.is_initialized():
         from torch.utils.data.distributed import DistributedSampler
         sampler = DistributedSampler(train_data)
     else:
         sampler =  None
 
-    # TODO check shuffle
     data_loader = torch.utils.data.DataLoader(train_data,
                             num_workers= cfg.SYS.WORKERS,
-                            batch_size=cfg.DATASET.TRAIN_BATCH_SIZE//len(cfg.SYS.GPUS),
+                            batch_size=cfg.TRAIN.BATCH_SIZE//len(cfg.SYS.GPUS),
                             shuffle=cfg.DATA.SHUFFLE,
                             pin_memory=cfg.SYS.PIN_MEMORY,
                             drop_last=cfg.DATA.DROP_LAST,
@@ -61,7 +61,10 @@ def build_val_loader(cfg):
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
             ])
-    val_data = Cityscapes(data_root='cityscapes/', split='val', transforms=val_transforms)
+
+    dataModule = importlib.import_module('data.'+cfg.DATA.SET)
+    Dataset = getattr(dataModule, 'Dataset')
+    val_data = Dataset(cfg, data_root='cityscapes/', split='val', transforms=val_transforms)
 
     if dist.is_initialized():
         from torch.utils.data.distributed import DistributedSampler
@@ -71,14 +74,14 @@ def build_val_loader(cfg):
 
     data_loader = torch.utils.data.DataLoader(val_data,
                                             num_workers=cfg.SYS.WORKERS//2,
-                                            batch_size=cfg.DATASET.BATCH_SIAE_VAL//len(cfg.SYS.GPUS),
+                                            batch_size=cfg.TRAIN.BATCH_SIZE_VAL//len(cfg.SYS.GPUS),
                                             shuffle=cfg.DATA.SHUFFLE,
                                             pin_memory=cfg.SYS.PIN_MEMORY,
                                             sampler=sampler)
 
     return data_loader
 
-def build_test_loader(H,W):
+def build_test_loader(cfg,):
 
     value_scale = 255
     mean = [0.485, 0.456, 0.406]
@@ -90,11 +93,14 @@ def build_test_loader(H,W):
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
             ])
-    val_data = Cityscapes(data_root='cityscapes/', split='val', transforms=val_transforms)
+
+    dataModule = importlib.import_module('data.'+cfg.DATA.SET)
+    Dataset = getattr(dataModule, 'Dataset')
+    test_data = Dataset(data_root='cityscapes/', split='val', transforms=val_transforms)
       
-    img_list = val_data.get_file_path()
+    img_list = test_data.get_file_path()
     
-    data_loader = torch.utils.data.DataLoader(val_data,
+    data_loader = torch.utils.data.DataLoader(test_data,
                                             num_workers=4,
                                             batch_size=1,
                                             shuffle=False,
