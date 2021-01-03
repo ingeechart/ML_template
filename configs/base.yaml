@@ -1,32 +1,32 @@
 SYS:
-  EXP_NAME: 'testing'
-  GPUS:
+  EXP_NAME: 'test2'
+  GPUS: (0,1,2,3)
   WORKERS: 8
   PIN_MEMORY: True
   LOCAL_RANK: ''
 
-CUDNN:
-  BENCHMARK: True
-  DETERMINISTIC: False
-  ENABLED: True
 
 TRAIN:
   RESUME: ''
   START_EPOCH: 1
-  END_EPOCH: 800
-  PRINT_FREQ: 20
+  END_EPOCH: 1
+  PRINT_FREQ: 1
   BATCH_SIZE: 16
   BATCH_SIZE_VAL: 4
   SEED: 1007
+  CUDNN:
+    BENCHMARK: True
+    DETERMINISTIC: False
+    ENABLED: True
   OPT: 
     NAME: 'SGD'
     LR: 0.02
     NBB_LR: 0.06
-    WD: 1e-4
+    WD: 0.0001
     MOMENTUM: 0.9
 
 MODEL:
-  NAME: 'model'
+  NAME: 'ctx48'
   BB_PRETRAINED: ''
   LOSS: ''
   FREEZE_BN: ''
@@ -34,8 +34,8 @@ MODEL:
 
 
 DATA:
-  ROOT: 'cityscapes/'
   SET: 'cityscapes'
+  ROOT: 'cityscapes/'
   NUM_CLASSES: 19
   TRAIN_SPLIT: 'train'
   VAL_SPLIT: 'val'
