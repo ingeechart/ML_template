@@ -18,7 +18,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 
-from model import build_model
+from models import *
 from data.buildDataloader import build_train_loader, build_val_loader
 from utils.utils import *
 
@@ -51,16 +51,18 @@ def main():
     args, cfg = parse_args()
 
     # *  define paths ( output, logger) * #
-    if not os.path.exists(cfg.SYS.OUTPUT_DIR):
-        os.makedirs(cfg.SYS.OUTPUT_DIR)
-        
+
+    # get logger path
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
     logger_path = cfg.SYS.OUTPUT_DIR+'log/'+timestamp +'.log'
-
+    
+    check_makedirs(cfg.SYS.OUTPUT_DIR)
+    check_makedirs(os.path.dirname(logger_path))
+    
     global logger, tWriter, vWriter
     logger = get_logger(logger_path)
-    tWriter = SummaryWriter(cfg.OUTPUT_DIR+'tb_data/train')
-    vWriter = SummaryWriter(cfg.OUTPUT_DIR+'tb_data/val')
+    tWriter = SummaryWriter(cfg.SYS.OUTPUT_DIR+'tb_data/train')
+    vWriter = SummaryWriter(cfg.SYS.OUTPUT_DIR+'tb_data/val')
     
     # * controll random seed * #
     torch.manual_seed(cfg.TRAIN.SEED)
@@ -71,18 +73,18 @@ def main():
 
 
     # TODO: findout what cudnn options are
-    cudnn.benchmark = cfg.CUDNN.BENCHMARK
-    cudnn.deterministic = cfg.CUDNN.DETERMINISTIC
-    cudnn.enabled = cfg.CUDNN.ENABLED
+    cudnn.benchmark = cfg.TRAIN.CUDNN.BENCHMARK
+    cudnn.deterministic = cfg.TRAIN.CUDNN.DETERMINISTIC
+    cudnn.enabled = cfg.TRAIN.CUDNN.ENABLED
 
 
     msg = '[{time}]' 'starts experiments setting '\
-            '{exp_name}'.format(time = time.ctime(), exp_name = cfg.EXP_NAME)
+            '{exp_name}'.format(time = time.ctime(), exp_name = cfg.SYS.EXP_NAME)
     logger.info(msg)
     
 
     # * GPU env setup. * #
-    distributed = args.local_rank >= 0
+    distributed = (len(cfg.SYS.GPUS)>0)
     if distributed:
         torch.distributed.init_process_group(
             backend="nccl", init_method="env://",
@@ -116,7 +118,7 @@ def main():
 
     # * define OPTIMIZER * #
     params_dict = dict(model.named_parameters())
-    if cfg.cfg.MODEL.NBB_KEYWORDS:
+    if cfg.MODEL.NBB_KEYWORDS:
         bb_lr = []
         nbb_lr = []
         nbb_keys = set()
@@ -182,9 +184,10 @@ def main():
             if dist.get_rank()==0:
                 logger.info("=> no checkpoint found at '{}'".format(cfg.TRAIN.RESUME))
 
-
+    logger.info(config.summary(cfg))
     logger.info('starts training')
-    for epoch in range(start_epoch, cfg.TRAIN.END_EPOCH):
+
+    for epoch in range(cfg.TRAIN.START_EPOCH, cfg.TRAIN.END_EPOCH+1):
 
         loss_train, mIoU_train, mAcc_train, allAcc_train = train(model, train_loader, optimizer, epoch, cfg)
         loss_val, mIoU_val, mAcc_val, allAcc_val = validation(model, val_loader, cfg)
@@ -205,7 +208,7 @@ def main():
                     'epoch': epoch,
                     'state_dict': model.module.state_dict(),
                     'optimizer': optimizer.state_dict(),
-                }, os.path.join(cfg.OUTPUT_DIR,'best.pth.tar'))
+                }, os.path.join(cfg.SYS.OUTPUT_DIR,'best.pth.tar'))
                 best_mIoU = mIoU_val
                 best_epoch = epoch
 
@@ -215,7 +218,7 @@ def main():
                 'optimizer': optimizer.state_dict(),
                 'best_mIoU': best_mIoU,
                 'bset_epoch': best_epoch,
-            }, os.path.join(cfg.OUTPUT_DIR,'checkpoint.pth.tar'))
+            }, os.path.join(cfg.SYS.OUTPUT_DIR,'checkpoint.pth.tar'))
 
         if args.local_rank <= 0:
             msg = 'Loss_train: {:.10f}  Loss_val: {:.10f}'.format(loss_train, loss_val)
@@ -227,7 +230,7 @@ def main():
 
     if args.local_rank <= 0:
         torch.save(model.module.state_dict(),
-            os.path.join(cfg.OUTPUT_DIR, 'final_state.pth'))
+            os.path.join(cfg.SYS.OUTPUT_DIR, 'final_state.pth'))
 
 
 def train(model, train_loader, optimizer, epoch, cfg):
@@ -258,7 +261,7 @@ def train(model, train_loader, optimizer, epoch, cfg):
         optimizer.step()
 
 
-        # TODO. this tis for recordings. need to refine this.
+        # *  this tis for recordings.
         n = imgs.size(0) # n = batch size of each GPU
         if dist.is_initialized():
             loss = loss * n
@@ -281,13 +284,13 @@ def train(model, train_loader, optimizer, epoch, cfg):
         end = time.time()
 
 
-        current_iter = epoch * len(train_loader) + i_iter + 1
+        current_iter = (epoch-1)*len(train_loader) + i_iter+1
 
-        lr = adjust_learning_rate(optimizer,
-                                  cfg.TRAIN.OPT.LR,
-                                  cfg.TRAIN.OPT.NBB_LR
-                                  max_iter,
-                                  current_iter)
+        adjust_learning_rate(optimizer,
+                                cfg.TRAIN.OPT.LR,
+                                cfg.TRAIN.OPT.NBB_LR,
+                                max_iter,
+                                current_iter)
 
         # * compute remain time
         remain_iter = max_iter - current_iter
@@ -296,16 +299,17 @@ def train(model, train_loader, optimizer, epoch, cfg):
         t_h, t_m = divmod(t_m, 60)
         remain_time = '{:02d}:{:02d}:{:02d}'.format(int(t_h), int(t_m), int(t_s))
         
-        if (i_iter+1) % cfg.PRINT_FREQ == 0 and dist.get_rank() == 0:
+        if (i_iter+1) % cfg.TRAIN.PRINT_FREQ == 0 and dist.get_rank() == 0:
             msg ='Epoch: [{}/{}]({:.2f}%) [{}/{}] '\
                     'Data {data_time.val:.3f} ({data_time.avg:.3f}) '\
                     'Batch {batch_time.val:.3f} ({batch_time.avg:.3f}) '\
                     'Remain {remain_time} '\
                     'Loss {loss_meter.val:.4f} '\
                     'Accuracy {accuracy:.4f} '\
-                    'lr {lr}.'.format(epoch+1, cfg.TRAIN.END_EPOCH, 
-                                    ((epoch+1)/cfg.TRAIN.END_EPOCH)*100, 
-                                    i_iter + 1, len(train_loader),
+                    'lr {lr}.'.format(epoch, cfg.TRAIN.END_EPOCH, 
+                                    # ((epoch)/cfg.TRAIN.END_EPOCH)*100, 
+                                    (current_iter/max_iter)*100, 
+                                    i_iter+1, len(train_loader),
                                     batch_time=batch_time,
                                     data_time=data_time,
                                     remain_time=remain_time,
@@ -329,21 +333,20 @@ def train(model, train_loader, optimizer, epoch, cfg):
     allAcc = sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)
     if dist.get_rank() == 0:
         logger.info('Train result at epoch [{}/{}]: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(
-                            epoch+1, cfg.TRAIN.END_EPOCH, mIoU, mAcc, allAcc))
+                            epoch, cfg.TRAIN.END_EPOCH, mIoU, mAcc, allAcc))
 
     return loss_meter.avg, mIoU, mAcc, allAcc
 
 
 def validation(model, val_loader, cfg):
+    batch_time = AverageMeter('Batch_Time', ':6.3f')
+    data_time = AverageMeter('Data_Time', ':6.3f')
+    loss_meter = AverageMeter('Loss', ':.4e')
 
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
-    loss_meter = AverageMeter()
+    intersection_meter = AverageMeter('IoU')
+    union_meter = AverageMeter('Union')
+    target_meter = AverageMeter('Target')
 
-    intersection_meter = AverageMeter()
-    union_meter = AverageMeter()
-    target_meter = AverageMeter()
-    
     model.eval()
     end = time.time()
     with torch.no_grad():
@@ -375,7 +378,7 @@ def validation(model, val_loader, cfg):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if ((i_iter+1) % cfg.PRINT_FREQ) == 0 and dist.get_rank() == 0:
+            if ((i_iter+1) % cfg.TRAIN.PRINT_FREQ) == 0 and dist.get_rank() == 0:
                 logger.info('Test: [{}/{}] '
                             'Data {data_time.val:.3f} ({data_time.avg:.3f}) '
                             'Batch {batch_time.val:.3f} ({batch_time.avg:.3f}) '
